@@ -15,3 +15,79 @@ When a task is passed to Arena, the user receives `std::future` as feedback thro
 can get the result of the task. Due to the possibility of interruption (cancellation), it <br>
 makes sense to declare the result returned by the task as optional (e.g. `std::optional<int>`).<br>
 (See examples)
+
+
+Example of use:
+```c++
+#include <optional>
+#include "task-arena/pool.h"
+
+using namespace std::chrono_literals;
+
+task_arena::ThreadPool pool;
+
+/// Function used as task.
+/// As return value we use std::optional<int> instead int.
+/// This gives us the ability to return 'nothing' when a cancel occurs.
+std::optional<int> task_as_function() {
+    auto internal_task_future = pool.add_task([]() {
+        std::this_thread::sleep_for(300ms);
+        return 5;
+    });
+
+    std::this_thread::sleep_for(600ms);
+    if (pool.canceled()) {
+        task_arena::printer::print("-- Canceled task_as_function");
+        return {};
+    }
+    task_arena::printer::print("-- Finished task_as_function");
+    return 6 + internal_task_future.get();
+}
+
+/// Lambda used as task.
+auto task_as_lambda = []() -> std::optional<int> {
+    std::this_thread::sleep_for(900ms);
+
+    if (pool.canceled()) {
+        task_arena::printer::print("-- Canceled task_as_lambda");
+        return {};
+    }
+    task_arena::printer::print("-- Finished task_as_lambda");
+    return 100 + 200;
+};
+
+int main() {
+    auto fut1 = pool.add_task(task_as_function);
+    auto fut2 = pool.add_task(task_as_lambda);
+
+    if (auto result = fut1.get(); result)
+        task_arena::printer::print("** Result of task_as_function: ", result.value());
+
+    pool.cancel();
+
+    if (auto const result = fut2.get(); result)
+        task_arena::printer::print("task_as_lambda result: ", *result);
+
+    return 0;
+}
+```
+
+Result of example execution
+```c++
+Created thread: 0x16bb1f000, idx: 0
+Created thread: 0x16bcc3000, idx: 3
+Created thread: 0x16bd4f000, idx: 4
+Created thread: 0x16bc37000, idx: 2
+Created thread: 0x16bddb000, idx: 5
+Created thread: 0x16bbab000, idx: 1
+task added to pool queue
+task added to pool queue
+started task from pool queue: 2
+task added to local queue
+started task from pool queue: 0
+started task stealed from other queue: 1
+-- Finished task_as_function
+** Result of task_as_function: 11
+-- Canceled task_as_lambda
+joiner
+```
