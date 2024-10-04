@@ -72,7 +72,7 @@ int main() {
 }
 ```
 
-Result of example execution
+Result of example execution:
 ```c++
 Created thread: 0x16bb1f000, idx: 0
 Created thread: 0x16bcc3000, idx: 3
